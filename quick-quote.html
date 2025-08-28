@@ -3,25 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quick Quote — V20.5.4</title>
+  <title>Quick Quote — PWF (V20.5.4)</title>
   <!--
-    Quick Quote — V20.5.4
-    Changes vs V20.5.3:
-      • Fee follows MAIN PAGE tier logic (not locked 3%):
-          $5k–9,999 → $350
-          $10k–14,999 → $450
-          $15k–18,999 → $550
-          $19k+ → 3%
-      • Keeps ISO↔Sell coupling (±0.01 SR per 1% ISO change)
-      • Payment ALWAYS recomputes when ISO (and thus Sell) changes using basePeriods:
-          basePeriods = (Advance × Sell_main) ÷ payment_main
-          newPayment  = (Advance × Sell_new) ÷ basePeriods
-        with fallback to monthsBase → daily/weekly if main payment was blank
+    V20.5.4 (QQ standalone)
+    • Payment ALWAYS recomputes when ISO (and thus Sell) changes using base-periods method:
+        basePeriods = (Advance × Sell_main) ÷ payment_main
+        newPayment  = (Advance × Sell_new) ÷ basePeriods
+    • Fee: Auto-tiered EXACTLY like main page:
+        $5k–9,999 → $350
+        $10k–14,999 → $450
+        $15k–18,999 → $550
+        $19k+ → 3% of Advance
+      (replaces previous hard-locked 3% behavior)
   -->
   <style>
-    :root{ --gold:#d09c34; --bg:#101424; --text:#fff; --panel:#12182c; --border:rgba(255,255,255,.10); --sub:rgba(255,255,255,.70); --radius:16px; }
+    :root{ --gold:#d09c34; --bg:#101424; --panel:#12182c; --text:#ffffff; --sub:rgba(255,255,255,.70); --border:rgba(255,255,255,.10); --radius:16px; }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:#fff;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial}
     header{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
     .brand{font-weight:800;letter-spacing:.4px;color:#d09c34}
     .deal{font-size:12px;color:#9bb;border:1px solid var(--border);padding:6px 10px;border-radius:999px}
@@ -32,8 +30,7 @@
     .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
     .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
     .stat{background:rgba(16,20,36,.6);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative}
-    .k{font-size:12px;color:#9bb}
-    .v{font-size:18px;font-weight:700;margin-top:6px}
+    .k{font-size:12px;color:#9bb} .v{font-size:18px;font-weight:700;margin-top:6px}
     .ibox{width:100%;background:rgba(16,20,36,.6);border:1px solid var(--border);border-radius:10px;color:#fff;padding:10px;font-size:16px}
     .sm{font-size:12px;color:#9bb;margin-top:6px}
     table{width:100%;border-collapse:collapse;margin-top:14px}
@@ -42,63 +39,44 @@
     .bar{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
     .btn{cursor:pointer;background:linear-gradient(180deg,var(--gold),#b5862e);color:#111;border:none;border-radius:10px;padding:10px 14px;font-weight:700}
     .btn.sec{background:transparent;color:#fff;border:1px solid var(--border)}
-    .exp-chip{position:absolute; right:12px; top:10px; font-size:12px; color:#9bb;}
-    .lock{position:absolute; right:12px; top:10px; font-size:12px; color:#9bb;}
+    .chip{position:absolute; right:12px; top:10px; font-size:12px; color:#9bb;}
     @media (max-width:860px){ .grid3{grid-template-columns:1fr 1fr} .grid4{grid-template-columns:1fr 1fr} }
     @media print{ .btn{display:none} header{display:none} }
   </style>
 </head>
 <body>
-  <header><div class="brand">PAC Western Financial</div><div class="deal" id="qqDealHeader"></div></header>
+  <header>
+    <div class="brand">PAC Western Financial</div>
+    <div class="deal" id="qqDealHeader">Deal: —</div>
+  </header>
+
   <div class="wrap">
     <div class="card">
-      <h2>Quick Quote <span class="deal" id="qqDealBadge"></span></h2>
+      <h2>Quick Quote <span class="deal" id="qqDealBadge">—</span></h2>
       <div class="content">
         <div class="stat" style="margin-bottom:12px;">
           <div class="k">Approved Range</div>
-          <div class="exp-chip" id="qqExp"></div>
+          <div class="chip" id="qqExp"></div>
           <div class="v"><span id="qqRange"></span></div>
-          <div class="k" style="margin-top:4px;color:#6f8ca8">(Locked to main page)</div>
+          <div class="k" style="margin-top:4px;color:#6f8ca8">(Locked to sent deal)</div>
         </div>
 
         <div class="grid4">
-          <div class="stat">
-            <div class="k">Advance Amount ($)</div>
-            <div><input class="ibox" type="number" id="qqAdvance" step="100" min="5000" value="0" /></div>
-          </div>
-          <div class="stat">
-            <div class="k">ISO Commission (%)</div>
-            <div><input class="ibox" type="number" id="qqIsoPct" step="1" min="0" max="100" value="0" /></div>
-          </div>
-          <div class="stat" style="position:relative;">
-            <div class="k">Sell Rate</div>
-            <div class="lock">Auto-coupled to ISO</div>
-            <div><input class="ibox" type="number" id="qqSell" step="0.01" min="1" value="1.30" /></div>
-          </div>
-          <div class="stat">
-            <div class="k">Buy Rate</div>
-            <div><input class="ibox" type="number" id="qqBuy" step="0.01" min="1" value="1.20" disabled /></div>
-          </div>
+          <div class="stat"><div class="k">Advance Amount ($)</div><div><input class="ibox" type="number" id="qqAdvance" step="100" min="5000" /></div></div>
+          <div class="stat"><div class="k">ISO Commission (%)</div><div><input class="ibox" type="number" id="qqIsoPct" step="1" min="0" max="100" /></div></div>
+          <div class="stat"><div class="k">Sell Rate</div><div class="chip">Auto-coupled to ISO</div><div><input class="ibox" type="number" id="qqSell" step="0.01" /></div></div>
+          <div class="stat"><div class="k">Buy Rate</div><div><input class="ibox" type="number" id="qqBuy" step="0.01" disabled /></div></div>
         </div>
 
         <div class="grid4" style="margin-top:12px;">
           <div class="stat">
             <div class="k">Fee ($)</div>
-            <div><input class="ibox" type="number" id="qqFeeBox" step="1" min="0" value="0" disabled /></div>
+            <div><input class="ibox" type="number" id="qqFeeBox" step="1" min="0" disabled /></div>
             <div class="sm">Auto-tiered (same as Main)</div>
           </div>
-          <div class="stat">
-            <div class="k">Holdback</div>
-            <div class="v" id="qqHold">0</div>
-          </div>
-          <div class="stat">
-            <div class="k">Payment Amount (<span id="qqFreq">Weekly</span>)</div>
-            <div class="v" id="qqPayAmt">$0</div>
-          </div>
-          <div class="stat">
-            <div class="k">Total Payments</div>
-            <div class="v" id="qqTot">0</div>
-          </div>
+          <div class="stat"><div class="k">Holdback</div><div class="v" id="qqHold">$0</div></div>
+          <div class="stat"><div class="k">Payment Amount (<span id="qqFreq">Weekly</span>)</div><div class="v" id="qqPayAmt">$0</div></div>
+          <div class="stat"><div class="k">Total Payments</div><div class="v" id="qqTot">0</div></div>
         </div>
 
         <div class="grid3" style="margin-top:12px;">
@@ -108,141 +86,130 @@
         </div>
 
         <h3 style="margin:16px 0 8px;">Prepay Scenarios</h3>
-        <table><thead><tr><th>Scenario</th><th>Estimated Discount</th><th>Payoff</th><th>Sell Rate</th></tr></thead><tbody id="qqPpBody"></tbody></table>
+        <table>
+          <thead><tr><th>Scenario</th><th>Estimated Discount</th><th>Payoff</th><th>Sell Rate</th></tr></thead>
+          <tbody id="qqPpBody"></tbody>
+        </table>
 
         <div class="bar">
-          <button class="btn sec" id="qqBack">Back</button>
+          <button class="btn sec" id="qqBack">Close</button>
           <button class="btn" id="qqPrint">Print</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- URL data helper -->
+  <!-- URL data loader -->
   <script src="lz-string.min.js"></script>
   <script>
     function getQQDataFromUrl(){
-      const p = new URLSearchParams(location.search);
-      const q = p.get('q');
-      if(!q) return null;
-      try{ return JSON.parse(LZString.decompressFromEncodedURIComponent(q)); }
-      catch{ return null; }
+      const p=new URLSearchParams(location.search); const q=p.get('q'); if(!q) return null;
+      try{ return JSON.parse(LZString.decompressFromEncodedURIComponent(q)); }catch{return null}
     }
-  </script>
-
-  <script>
-    const fmt=(n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
-    const fmt0=(n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});
-
-    // === Seed from URL ===
     const data = getQQDataFromUrl();
+
+    // Defaults for safety if the page is opened directly
     const name        = data?.name        ?? '';
-    const mainAdvance = data?.advance     ?? 0;
-    const sellInit    = data?.sell        ?? 1.3;
-    const buyInit     = data?.buy         ?? 1.2;
-    const isoInit     = data?.iso         ?? 0;
-    const holdback    = data?.holdback    ?? 0;
-    const expDateISO  = data?.expISO      ?? '';
-    const periodicPayMain = data?.periodicPay ?? 0;
-    const frequencyMainRaw = data?.frequency ?? 'weekly';
-    const freqLabelMain = frequencyMainRaw.charAt(0).toUpperCase()+frequencyMainRaw.slice(1);
+    const mainAdvance = Number(data?.advance ?? 0);
+    const sellInit    = Number(data?.sell    ?? 1.3);
+    const buyInit     = Number(data?.buy     ?? 1.2);
+    const isoInit     = Number(data?.iso     ?? 0);
+    const holdback    = Number(data?.holdback?? 0);
+    const expDateISO  = data?.expISO        ?? '';
+    const periodicPayMain   = Number(data?.periodicPay ?? 0);
+    const frequencyMainRaw  = data?.frequency ?? 'weekly';
+    const freqLabelMain     = frequencyMainRaw.charAt(0).toUpperCase()+frequencyMainRaw.slice(1);
     const prepayRates = Array.isArray(data?.prepayRates) ? data.prepayRates : [];
-    const maxM = data?.maxM ?? Math.max(1, prepayRates.length || 4);
+    const maxM        = Number(data?.maxM ?? Math.max(1, prepayRates.length || 4));
 
-    // monthsBase from MAIN at open
+    // Derived base term info from main page at time of share
     const paybackMain = mainAdvance * sellInit;
-    let monthsBase = 0;
-    if(periodicPayMain>0){
-      if(frequencyMainRaw==='weekly') monthsBase = (paybackMain / periodicPayMain) / 4.33;
-      else if(frequencyMainRaw==='daily') monthsBase = (paybackMain / periodicPayMain) / 21;
-    }
-    if(!(monthsBase>0)) monthsBase = 1;
-
-    // basePeriods method
-    const basePeriods = (periodicPayMain>0 && paybackMain>0) ? (paybackMain / periodicPayMain) : NaN;
-
-    // Approved range (cap Advance to main)
-    const approvedUpperLocked = +Number(mainAdvance||0).toFixed(2);
+    const basePeriods = (periodicPayMain>0 && paybackMain>0) ? (paybackMain / periodicPayMain) : NaN; // may be fractional
 
     // DOM refs
-    const adv=document.getElementById('qqAdvance');
-    const isoPct=document.getElementById('qqIsoPct');
-    const sell=document.getElementById('qqSell');
-    const buy=document.getElementById('qqBuy');
-    const rangeEl=document.getElementById('qqRange');
-    const payOut=document.getElementById('qqPayback');
-    const netOut=document.getElementById('qqNet');
-    const isoOut=document.getElementById('qqIso');
-    const ppBody=document.getElementById('qqPpBody');
-    const qqTot=document.getElementById('qqTot');
-    const qqPayAmt=document.getElementById('qqPayAmt');
-    const qqHold=document.getElementById('qqHold');
-    const feeBox=document.getElementById('qqFeeBox');
+    const adv    = document.getElementById('qqAdvance');
+    const isoPct = document.getElementById('qqIsoPct');
+    const sell   = document.getElementById('qqSell');
+    const buy    = document.getElementById('qqBuy');
+    const rangeEl= document.getElementById('qqRange');
+    const expEl  = document.getElementById('qqExp');
 
-    // Header labels
-    document.getElementById('qqDealHeader').textContent = 'Deal: ' + name;
+    const payOut = document.getElementById('qqPayback');
+    const netOut = document.getElementById('qqNet');
+    const isoOut = document.getElementById('qqIso');
+    const ppBody = document.getElementById('qqPpBody');
+    const qqTot  = document.getElementById('qqTot');
+    const qqPayAmt = document.getElementById('qqPayAmt');
+    const qqHold = document.getElementById('qqHold');
+    const feeBox = document.getElementById('qqFeeBox');
+    const freqChip = document.getElementById('qqFreq');
+
+    // Header bits
+    document.getElementById('qqDealHeader').textContent = 'Deal: ' + (name || '—');
     document.getElementById('qqDealBadge').textContent  = name || '—';
-    document.getElementById('qqExp').textContent = expDateISO || '';
-    document.getElementById('qqFreq').textContent = freqLabelMain;
+    expEl.textContent = expDateISO || '';
 
-    // Seed inputs
-    adv.max = String(mainAdvance||0);
-    adv.value = String(mainAdvance||0);
-    isoPct.value = String(Math.round(isoInit||0));
-    sell.value = (+sellInit||1.3).toFixed(2);
-    sell.min = (+buyInit||1).toFixed(2);
-    buy.value = (+buyInit||1.2).toFixed(2);
-    qqHold.textContent = (holdback||0).toLocaleString();
+    // Init inputs
+    adv.value    = String(mainAdvance || 0);
+    isoPct.value = String(Math.round(isoInit || 0));
+    sell.value   = String(Number(sellInit || buyInit).toFixed(2));
+    buy.value    = String(Number(buyInit || 1).toFixed(2));
+    freqChip.textContent = freqLabelMain;
 
-    // Approved range text
-    (function(){ rangeEl.textContent = '$5,000 – ' + fmt(approvedUpperLocked); })();
+    // Approved range display (lower bound cosmetic)
+    function fmtUSD(n){return (n||0).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});}
+    (function(){ const upper=+adv.value||0; rangeEl.textContent = '$5,000 – ' + fmtUSD(upper); })();
 
-    // === Fee logic (mirror MAIN page) ===
-    function autoTierFee(A){
-      A = +A || 0;
-      if(A <= 0) return 0;
-      if(A <= 9999) return 350;
-      if(A <= 14999) return 450;
-      if(A <= 18999) return 550;
-      return +(A * 0.03).toFixed(2);
+    // === Fee: auto-tier like MAIN ===
+    function feeAutoTier(A){
+      A=+A||0; if(A<=0) return 0;
+      if(A<=9999) return 350;
+      if(A<=14999) return 450;
+      if(A<=18999) return 550;
+      return +(A*0.03).toFixed(2);
     }
 
-    // === Coupling + render ===
-    const sellBaseline=+sellInit.toFixed(2);
-    const isoBaseline=Math.round(+isoInit||0);
+    const sellBaseline = Number(sellInit.toFixed ? sellInit.toFixed(2) : sellInit);
+    const isoBaseline  = Math.round(isoInit);
+
     let userEditingSell=false;
     sell.addEventListener('focus', ()=>{ userEditingSell=true; });
-    sell.addEventListener('blur', ()=>{ userEditingSell=false; const br=+buy.value||0; let v=parseFloat(sell.value); if(!Number.isFinite(v)) v=br; if(v < br) v = br; sell.value=v.toFixed(2); render(); });
+    sell.addEventListener('blur', ()=>{ userEditingSell=false; const br=+buy.value||0; let v=parseFloat(sell.value); if(!Number.isFinite(v)) v=br; if(v<br) v=br; sell.value=v.toFixed(2); render(); });
 
     function clampSellToBuy(val){ const br=+buy.value||0; return Math.max(val, br); }
 
     function render(){
-      let A=+adv.value||0; if(A> (mainAdvance||0)){ A = mainAdvance; adv.value = String(mainAdvance||0); }
-      let pct=Math.round(+isoPct.value||0); if(pct<0) pct=0; if(pct>100) pct=100; isoPct.value=pct.toFixed(0);
+      // Inputs and clamps
+      let A=+adv.value||0; if(A<0) A=0; adv.value=String(A);
+      let pct=Math.round(+isoPct.value||0); if(pct<0) pct=0; if(pct>100) pct=100; isoPct.value=String(pct);
 
-      // Fee (auto-tier like Main)
-      const fee = autoTierFee(A); feeBox.value = String(fee);
+      // Fee = auto-tier (disabled box, display-only)
+      const fee = feeAutoTier(A); feeBox.value = String(fee);
 
-      // Sell auto-couples to ISO
-      const br = +buy.value||0; sell.min = br.toFixed(2);
-      const deltaPct = pct - isoBaseline; // + when ISO up
-      const coupledSell = Number((sellBaseline + (deltaPct * 0.01)).toFixed(2));
+      // Sell auto-coupled to ISO (±0.01 per 1% change), unless actively edited
+      const br=+buy.value||0; sell.min=br.toFixed(2);
+      const deltaPct = pct - isoBaseline; // positive when ISO up
+      const coupledSell = Number((sellBaseline + (deltaPct*0.01)).toFixed(2));
       if(!userEditingSell){ sell.value = clampSellToBuy(coupledSell).toFixed(2); }
       let sr=+sell.value; if(!Number.isFinite(sr)) sr = clampSellToBuy(sellBaseline);
       if(!userEditingSell && sr < br){ sr = br; sell.value = br.toFixed(2); }
 
       // Core calcs
-      const payback = +(A*sr).toFixed(2);
-      const iso$ = +(A*(pct/100)).toFixed(2);
-      const net = Math.max(0, A - fee - (holdback||0));
-      payOut.textContent=fmt(payback); netOut.textContent=fmt(net); isoOut.textContent=fmt(iso$);
+      const payback = A*sr; const iso$ = A*(pct/100);
+      const net = Math.max(0, A - fee - holdback);
+      payOut.textContent = fmtUSD(payback);
+      netOut.textContent = fmtUSD(net);
+      isoOut.textContent = fmtUSD(iso$);
+      qqHold.textContent = (holdback||0).toLocaleString();
 
-      // Payment recompute (basePeriods) with fallback
+      // Payment recompute via basePeriods (your method). If not available, fallback by months approximation
       let paymentCalc = 0;
       if(Number.isFinite(basePeriods) && basePeriods>0){
         paymentCalc = payback / basePeriods;
       } else {
-        const monthly = payback / Math.max(1, monthsBase);
+        // Fallback: estimate a monthsBase from original frequency and a nominal 6 months if nothing else
+        const monthsBase = 6; // safe fallback; rarely used because shares usually include periodicPayMain
+        const monthly = payback / monthsBase;
         const daily = monthly / 21;
         const weekly = daily * 5;
         paymentCalc = (freqLabelMain==='Weekly') ? weekly : daily;
@@ -250,46 +217,48 @@
       const payment = Math.max(1, Math.round(paymentCalc));
 
       // Counts / final / months
-      let count = 0, finalPay = 0, monthsEst = 0;
+      let count=0, finalPay=0, monthsEst=0;
       if(payment>0 && payback>0){
         count = Math.ceil(payback / payment);
         finalPay = Math.max(0, Math.round(payback - payment*(count-1)));
         monthsEst = (freqLabelMain==='Weekly') ? (payback/payment)/4.33 : (payback/payment)/21;
       }
-      qqPayAmt.textContent = payment>0 ? (fmt0(payment) + ' (final ' + fmt0(finalPay) + ')') : '$0';
+      qqPayAmt.textContent = payment>0 ? (payment.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0}) + ' (final ' + finalPay.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0}) + ')') : '$0';
       qqTot.textContent = count ? (String(count) + ' (≈ ' + monthsEst.toFixed(2) + ' mo)') : '0';
 
-      // Prepay scenarios — shift ±0.01 per 1% ISO change
+      // Prepay table using provided month rates (seedRates). If a month value is null/empty, default to current sr
       ppBody.innerHTML='';
-      for(let m=1; m<= (maxM||4); m++){
-        const baseRate = +( (prepayRates[m-1] ?? sr) );
-        let rate = baseRate + (deltaPct * 0.01);
+      for(let m=1; m<=maxM; m++){
+        const baseRate = (prepayRates[m-1] ?? null);
+        let rate = Number.isFinite(baseRate) ? +baseRate : sr;
+        // keep the ISO-coupling shift behavior consistent with earlier versions
+        rate += (pct - isoBaseline) * 0.01;
         if(rate < 1) rate = 1;
-        const payoff=+(A*rate).toFixed(2);
-        const disc=+(payback - payoff).toFixed(2);
+        const payoff = +(A*rate).toFixed(2);
+        const disc = +(payback - payoff).toFixed(2);
         const tr=document.createElement('tr');
-        tr.innerHTML='<td>Month '+m+'</td><td>'+fmt(disc)+'</td><td>'+fmt(payoff)+'</td><td>'+rate.toFixed(2)+'</td>';
+        tr.innerHTML = '<td>Month '+m+'</td><td>'+fmtUSD(disc)+'</td><td>'+fmtUSD(payoff)+'</td><td>'+rate.toFixed(2)+'</td>';
         ppBody.appendChild(tr);
       }
     }
 
-    ['input','change','blur'].forEach(ev=>{ adv.addEventListener(ev,render); isoPct.addEventListener(ev,render); sell.addEventListener(ev,render); });
-    document.getElementById('qqBack').addEventListener('click',()=>{ history.length>1 ? history.back() : window.close(); });
-    document.getElementById('qqPrint').addEventListener('click',()=>{ window.print(); });
+    ['input','change','blur'].forEach(ev=>{
+      adv.addEventListener(ev, render);
+      isoPct.addEventListener(ev, render);
+      sell.addEventListener(ev, render);
+    });
+    document.getElementById('qqBack').addEventListener('click', ()=> window.close());
+    document.getElementById('qqPrint').addEventListener('click', ()=> window.print());
 
-    // Initial render
+    // initial render
     render();
 
-    // Guardrail
+    // basic guardrail sanity check
     try{
-      (function(){
-        const baseSR = +(+sellInit).toFixed(2); const baseISO = Math.round(+isoInit||0);
-        const newISO = baseISO + 2; // +2%
-        const expectedSR = +(baseSR + (2*0.01)).toFixed(2);
-        const calcSR = +(baseSR + ((newISO-baseISO)*0.01)).toFixed(2);
-        console.assert(calcSR===expectedSR, 'Sell should move 0.01 per 1% ISO change');
-      })();
-    }catch(e){ console.warn('QQ guardrails failed', e); }
+      const expected = +(sellBaseline + (2*0.01)).toFixed(2);
+      const calc = +(sellBaseline + ((isoBaseline+2 - isoBaseline)*0.01)).toFixed(2);
+      console.assert(calc===expected, 'Sell should move 0.01 per 1% ISO change');
+    }catch(e){ console.warn('Guardrail check failed', e); }
   </script>
 </body>
 </html>
