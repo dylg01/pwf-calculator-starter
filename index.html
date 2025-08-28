@@ -53,6 +53,10 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 .modal-card h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);font-size:18px;display:flex;align-items:center;justify-content:space-between}
 .modal-card .content{padding:16px}
 </style>
+  <!-- Plausible Analytics -->
+  <script defer data-domain="dylg01.github.io"
+    src="https://plausible.io/js/script.file-downloads.hash.outbound-links.pageview-props.revenue.tagged-events.js"></script>
+  <script>window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }</script>
 </head>
 <body>
 <header>PWF — Internal Deal Calculator</header>
@@ -176,10 +180,10 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
       <!-- Notes shared in Quick Quote link -->
       <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
         <div class="flex" style="margin-bottom:6px;">
-          <h3 style="margin:0; font-size:16px;">Quote Notes </h3>
+          <h3 style="margin:0; font-size:16px;">Deal Notes</h3>
           <span class="small">Included in link</span>
         </div>
-        <label for="notes" class="small">Use this to leave notes for ISO about DL, VC, banks, etc..</label>
+        <label for="notes" class="small">Use this to request info or add context for ISO</label>
         <textarea id="notes" maxlength="800" placeholder="E.g. Please upload the last 3 months of bank statements and verify the outstanding tax lien balance."></textarea>
         <div class="small" id="notesCount" style="text-align:right;opacity:.75">0 / 800</div>
       </div>
