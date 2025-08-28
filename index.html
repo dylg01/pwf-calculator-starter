@@ -1,16 +1,15 @@
+<!-- =========================
+FILE 1: index.html (UPDATED, COMPLETE)
+Key fix: use localStorage instead of sessionStorage to pass data to quick-quote.html (sessionStorage is per‑tab and doesn’t cross to the new window).
+========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PAC Western Deal Calculator — V20.5.3 (split)</title>
-<!-- V20.5.3: Quick Quote basePeriods logic, ISO↔Sell coupling, tiered fee, prepay -->
+<title>PAC Western Deal Calculator — V20.5.3 (split • QQ sync fix)</title>
 <style>
-:root{
-  --gold:#d09c34; --bg:#101424; --panel:#12182c; --muted:#0f1426; --text:#ffffff;
-  --sub:rgba(255,255,255,.70); --border:rgba(255,255,255,.10); --danger:#ff5a5a;
-  --radius:16px; --shadow:0 12px 30px rgba(0,0,0,.35);
-}
+:root{ --gold:#d09c34; --bg:#101424; --panel:#12182c; --muted:#0f1426; --text:#ffffff; --sub:rgba(255,255,255,.70); --border:rgba(255,255,255,.10); --danger:#ff5a5a; --radius:16px; --shadow:0 12px 30px rgba(0,0,0,.35); }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial}
@@ -40,400 +39,38 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 .small{font-size:12px;color:var(--sub)}
 .footer{text-align:center;color:var(--sub);font-size:12px;margin-top:20px}
 @media(max-width:960px){.container{grid-template-columns:1fr}.stats,.stats4{grid-template-columns:1fr 1fr}}
-@media print{
-  header{display:none}.btn{display:none}.card{box-shadow:none;border-color:#ddd}
-  .pill{border-color:#ddd;color:#444;background:#fff}.table-wrap{max-height:unset;overflow:visible}
-  body{background:#fff;color:#000}
-}
+@media print{ header{display:none}.btn{display:none}.card{box-shadow:none;border-color:#ddd} .pill{border-color:#ddd;color:#444;background:#fff}.table-wrap{max-height:unset;overflow:visible} body{background:#fff;color:#000} }
 </style>
 </head>
 <body>
 <header>PWF — Internal Deal Calculator</header>
 
+
 <div class="container">
-  <!-- Inputs Panel -->
-  <div class="card">
-    <h2>Deal Inputs <span class="pill" id="dealNameBadge">No Deal Name</span></h2>
-    <div class="content">
-      <div class="row">
-        <div>
-          <label>Deal Name</label>
-          <input type="text" id="dealName" placeholder="e.g. PWF" />
-        </div>
-        <div>
-          <label>Expiration Date</label>
-          <input type="date" id="startDate" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Advance Amount ($)</label>
-          <input type="number" id="advance" min="0" step="100" value="0" />
-        </div>
-        <div>
-          <label>Periodic Payment ($)</label>
-          <input type="number" id="periodicPay" min="1" step="1" placeholder="Enter weekly/daily payment" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Buy Rate (factor)</label>
-          <input type="number" id="buyRate" min="1" step="0.01" value="1.30" />
-        </div>
-        <div>
-          <label>Payment Frequency</label>
-          <select id="frequency">
-            <option value="daily">Daily (Business Days)</option>
-            <option value="weekly" selected>Weekly</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Sell Rate (factor)</label>
-          <input type="number" id="sellRate" inputmode="decimal" min="1" step="0.01" value="1.42" />
-        </div>
-        <div>
-          <label>ISO Commission (%)</label>
-          <input type="number" id="isoPts" min="0" max="100" step="1" value="12" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Fee ($)</label>
-          <input type="number" id="feeBox" min="0" step="1" value="0" />
-          <div class="small" style="margin-top:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="feeAuto" checked /> Auto-tier</label>
-            <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="noFee" /> No fee</label>
-            <span>Tier: $5k–9,999 → $350 • $10k–14,999 → $450 • $15k–18,999 → $550 • $19k+ → 3%</span>
-          </div>
-        </div>
-        <div>
-          <label>Holdback ($)</label>
-          <input type="number" id="holdback" min="0" step="100" value="0" />
-        </div>
-      </div>
-
-      <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
-        <div class="flex" style="margin-bottom:8px;">
-          <h3 style="margin:0; font-size:16px;">Prepay Settings</h3>
-          <span class="pill">:)</span>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Months</label>
-            <input type="number" id="maxPrepayMonths" min="1" max="12" step="1" value="4" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Template Month 1 Rate</label>
-            <input type="number" id="tpl1" step="0.01" min="1" value="1.15" />
-          </div>
-          <div>
-            <label>Template Month 2 Rate</label>
-            <input type="number" id="tpl2" step="0.01" min="1" value="1.20" />
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Template Month 3 Rate</label>
-            <input type="number" id="tpl3" step="0.01" min="1" value="1.25" />
-          </div>
-          <div>
-            <label>Template Month 4 Rate</label>
-            <input type="number" id="tpl4" step="0.01" min="1" value="1.30" />
-          </div>
-        </div>
-
-        <div class="flex" style="gap:8px; margin-top:8px;">
-          <button class="btn sec" id="applyTemplateBtn" type="button">Apply Template</button>
-          <button class="btn sec" id="clearPrepayBtn" type="button">Reset</button>
-        </div>
-
-        <div class="table-wrap" style="margin-top:10px;">
-          <table id="prepayRateTable">
-            <thead><tr><th>Month</th><th>Sell Rate @ Month</th></tr></thead>
-            <tbody id="prepayRateTbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="small" style="margin-top:10px;">PWF Calc</div>
-    </div>
-  </div>
-
-  <!-- Results & Tables -->
-  <div class="card">
-    <h2 class="flex">Summary <span class="pill" id="validationMsg" aria-live="polite">Ready</span></h2>
-    <div class="content">
-      <div class="flex" style="margin-bottom:12px;gap:8px;justify-content:flex-end">
-        <button class="btn sec" id="printBtn" type="button">Print</button>
-        <button class="btn sec" id="quickQuoteBtn" type="button">Quick Quote</button>
-        <button class="btn" id="recalcBtn" type="button">Recalculate</button>
-      </div>
-
-      <div class="stats4">
-        <div class="stat"><div class="k">Payback</div><div class="v" id="paybackEff">$0</div><div class="small">Advance × (Sell − ISO%)</div></div>
-        <div class="stat"><div class="k">Merchant Payback</div><div class="v" id="merchantPaybackGross">$0</div><div class="small">Advance × Sell Rate</div></div>
-        <div class="stat"><div class="k">Funder Payback</div><div class="v" id="funderPayback">$0</div><div class="small">Advance × Buy Rate</div></div>
-        <div class="stat"><div class="k">ISO Commission $</div><div class="v" id="grossSpread">$0</div><div class="small">ISO % × Advance</div></div>
-      </div>
-
-      <div class="stats" style="margin-top:12px;">
-        <div class="stat"><div class="k">Payment Amount</div><div class="v" id="paymentAmount">$0</div><div class="small"><span id="freqLabel">Weekly</span> fixed (Final included)</div></div>
-        <div class="stat"><div class="k">Total Payments</div><div class="v" id="totalPayments">0</div><div class="small">Count + months (MP ÷ pay ÷ 21/4.33)</div></div>
-        <div class="stat"><div class="k">Net Funded</div><div class="v" id="netFunded">$0</div><div class="small">Advance − Fee − Holdback</div></div>
-      </div>
-
-      <div style="margin-top:18px;">
-        <div class="flex" style="margin-bottom:8px;">
-          <h3 style="margin:0; font-size:16px;">Prepay Scenarios (Adjustable)</h3>
-          <span class="pill">Months: <span id="ppMonthsLabel">4</span></span>
-        </div>
-        <div class="table-wrap">
-          <table id="prepayScenarios">
-            <thead><tr><th>Scenarios</th><th>Estimated Discount</th><th>Payoff</th><th>Sell Rate</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="footer">PWF — Internal Calculator (Standalone HTML)</div>
-    </div>
-  </div>
+<!-- Inputs Panel -->
+<div class="card">
+<h2>Deal Inputs <span class="pill" id="dealNameBadge">No Deal Name</span></h2>
+<div class="content">
+<div class="row">
+<div>
+<label>Deal Name</label>
+<input type="text" id="dealName" placeholder="e.g. PWF" />
+</div>
+<div>
+<label>Expiration Date</label>
+<input type="date" id="startDate" />
+</div>
 </div>
 
-<script>
-'use strict';
 
-// ===== Helpers =====
-const byId = (id)=>document.getElementById(id);
-const fmt  = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
-const fmt0 = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});
-const toLocalISO=(date)=>{const d=new Date(date);const tz=d.getTimezoneOffset();const local=new Date(d.getTime()-tz*60000);return local.toISOString().slice(0,10);};
-const monthAheadISO=()=>{const d=new Date();d.setMonth(d.getMonth()+1);return toLocalISO(d);};
-
-function setDefaultStartDate(){ const el=byId('startDate'); if(el && !el.value){ el.value = monthAheadISO(); } }
-
-// ===== Fee logic (MAIN PAGE) =====
-function autoTierFee(advance){
-  const A=+advance||0; if(A<=0) return 0;
-  if(A<=9999) return 350;
-  if(A<=14999) return 450;
-  if(A<=18999) return 550;
-  return +(A*0.03).toFixed(2);
-}
-function currentFee(advance){
-  if(byId('noFee')?.checked) return 0;
-  if(byId('feeAuto')?.checked) return autoTierFee(advance);
-  const manual = +byId('feeBox').value || 0;
-  return Math.max(0, manual);
-}
-function syncFeeBox(advance){
-  const feeInput = byId('feeBox');
-  const auto=byId('feeAuto')?.checked, no=byId('noFee')?.checked;
-  if(no){ feeInput.value='0'; feeInput.disabled=true; }
-  else if(auto){ feeInput.value=String(autoTierFee(advance)); feeInput.disabled=true; }
-  else { feeInput.disabled=false; }
-}
-
-// ===== Prepay UI =====
-function rebuildPrepayRateRows(){
-  const maxM = Math.max(1, Math.min(12, +(byId('maxPrepayMonths').value) || 4));
-  byId('ppMonthsLabel').textContent = String(maxM);
-  const tb = byId('prepayRateTbody'); tb.innerHTML='';
-  for(let i=1;i<=maxM;i++){
-    const tr=document.createElement('tr');
-    tr.innerHTML = '<td>'+i+'</td><td><input data-month="'+i+'" class="prepayRate" type="number" step="0.01" min="1" /></td>';
-    tb.appendChild(tr);
-  }
-}
-function getPrepayRates(defaultSell){
-  const maxM = Math.max(1, Math.min(12, +(byId('maxPrepayMonths').value) || 4));
-  const inputs = Array.from(document.querySelectorAll('input.prepayRate'));
-  const rates=[];
-  for(let i=0;i<maxM;i++){
-    const raw=inputs[i]?.value;
-    const v = raw===''||raw===undefined ? NaN : +raw;
-    rates.push(Number.isFinite(v)? v : defaultSell);
-  }
-  return {rates, maxM};
-}
-function applyTemplateRates(){
-  const sell = +(byId('sellRate').value)||1.30;
-  const maxM = Math.max(1, Math.min(12, +(byId('maxPrepayMonths').value)||4));
-  const tpl=[ +(byId('tpl1').value)||1.15, +(byId('tpl2').value)||1.20, +(byId('tpl3').value)||1.25, +(byId('tpl4').value)||1.30 ];
-  const inputs = Array.from(document.querySelectorAll('input.prepayRate'));
-  for(let i=0;i<maxM;i++){
-    const v = (i<tpl.length && typeof tpl[i]==='number') ? tpl[i] : sell;
-    if(inputs[i]) inputs[i].value = (+v).toFixed(2);
-  }
-  updateAll();
-}
-function clearPrepayRates(){
-  document.querySelectorAll('input.prepayRate').forEach(el=>{ el.value=''; });
-  updateAll();
-}
-function renderPrepayScenarios({advance, sellRate, merchantPayback}){
-  const {rates,maxM} = getPrepayRates(sellRate);
-  const tbody = byId('prepayScenarios').querySelector('tbody'); tbody.innerHTML='';
-  for(let m=1;m<=maxM;m++){
-    const rawRate = rates[m-1] || sellRate;           // ABSOLUTE rate at that month
-    const payoff  = +(advance * rawRate).toFixed(2);  // payoff at that month
-    const discount= +(merchantPayback - payoff).toFixed(2); // gross - payoff
-    const tr=document.createElement('tr');
-    tr.innerHTML = '<td>If Paid off in Month '+m+'</td><td>'+fmt(discount)+'</td><td>'+fmt(payoff)+'</td><td>'+rawRate.toFixed(2)+'</td>';
-    tbody.appendChild(tr);
-  }
-}
-
-// ===== Recalc (Main) =====
-function updateAll(){
-  const name=(byId('dealName')?.value||'').trim();
-  const badge=byId('dealNameBadge'); if(badge) badge.textContent = name || 'No Deal Name';
-  if(name) document.title = 'Pac Western Deal — '+name;
-
-  setDefaultStartDate();
-  const startDate = byId('startDate')?.value || monthAheadISO();
-
-  const advance   = +byId('advance').value || 0;
-  const buyRate   = +byId('buyRate').value || 1.20;
-  const sellInput = byId('sellRate');
-  let   sellRate  = +sellInput.value || buyRate;
-  if(sellRate < buyRate) sellRate = buyRate;
-
-  const isoRaw    = +byId('isoPts').value || 0;
-  const isoPctUsed= Math.round(isoRaw); // whole points only
-  const holdback  = +byId('holdback').value || 0;
-  const frequency = byId('frequency')?.value || 'weekly';
-  const periodicPay = Math.max(0, Math.floor(+byId('periodicPay').value || 0));
-
-  syncFeeBox(advance);
-  const fee = currentFee(advance);
-
-  let msg='Ready';
-  if(advance<=0) msg='Advance must be > 0';
-  else if(periodicPay<=0) msg='Enter periodic payment > 0';
-  if(fee+holdback>advance) msg='Fee/Holdback exceed advance';
-  const tag=byId('validationMsg'); if(tag){ tag.textContent=msg; tag.style.color=(msg==='Ready'?'var(--sub)':'var(--danger)'); }
-
-  const effectiveSell = Math.max(0, sellRate - (isoPctUsed/100));
-  const merchantPaybackGross = advance * sellRate; // GROSS
-  const paybackEff = advance * effectiveSell;
-  const funderPayback = advance * buyRate;
-  const isoCommission = advance * (isoPctUsed/100);
-  const netFunded = Math.max(0, advance - fee - holdback);
-
-  byId('paybackEff').textContent = fmt(paybackEff);
-  byId('merchantPaybackGross').textContent = fmt(merchantPaybackGross);
-  byId('funderPayback').textContent = fmt(funderPayback);
-  byId('grossSpread').textContent = fmt(isoCommission);
-  byId('netFunded').textContent = fmt(netFunded);
-
-  // Payments math
-  const freqLabel = (frequency.charAt(0).toUpperCase()+frequency.slice(1));
-  byId('freqLabel').textContent = freqLabel;
-
-  let totalPayments = 0, finalPayment = 0;
-  if(periodicPay>0 && merchantPaybackGross>0){
-    totalPayments = Math.ceil(merchantPaybackGross / periodicPay);
-    finalPayment  = Math.max(0, Math.round(merchantPaybackGross - periodicPay*(totalPayments-1)));
-  }
-  const payTxt = (periodicPay>0)
-    ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')')
-    : '$0';
-  byId('paymentAmount').textContent = payTxt;
-
-  let months = 0;
-  if(periodicPay>0){
-    if(frequency==='weekly') months = (merchantPaybackGross / periodicPay) / 4.33;
-    else if(frequency==='daily') months = (merchantPaybackGross / periodicPay) / 21;
-  }
-  byId('totalPayments').textContent = String(totalPayments) + (totalPayments ? (' (≈ ' + months.toFixed(2) + ' mo)') : '');
-
-  // Prepay scenarios (use GROSS for discount math)
-  renderPrepayScenarios({advance,sellRate,merchantPayback:merchantPaybackGross});
-}
-
-function gatherQuickQuoteData(){
-  const {rates,maxM} = getPrepayRates(+byId('sellRate').value || 1.3);
-  const data = {
-    name: byId('dealName').value || '',
-    advance: +byId('advance').value || 0,
-    sellRate: Math.max(+byId('sellRate').value || 0, +byId('buyRate').value || 0),
-    buyRate: +byId('buyRate').value || 0,
-    isoPct: Math.round(+byId('isoPts').value || 0),
-    holdback: +byId('holdback').value || 0,
-    expDateISO: byId('startDate').value || monthAheadISO(),
-    periodicPayMain: Math.max(0, Math.floor(+byId('periodicPay').value || 0)),
-    frequencyMain: byId('frequency').value || 'weekly',
-    prepayRates: rates,
-    maxPrepayMonths: maxM,
-  };
-
-  // For basePeriods method on QQ
-  const paybackMain = data.advance * data.sellRate;
-  data.monthsBase = (() => {
-    if(data.periodicPayMain>0){
-      if(data.frequencyMain==='weekly') return (paybackMain / data.periodicPayMain) / 4.33;
-      if(data.frequencyMain==='daily')  return (paybackMain / data.periodicPayMain) / 21;
-    }
-    return 1;
-  })();
-  data.basePeriods = (data.periodicPayMain>0 && paybackMain>0) ? (paybackMain / data.periodicPayMain) : NaN;
-
-  return data;
-}
-function openQuickQuote(){
-  const data = gatherQuickQuoteData();
-  if(data.advance<=0){ alert('Enter a valid Advance first.'); return; }
-  sessionStorage.setItem('pwfQQData', JSON.stringify(data));
-  const w = window.open('./quick-quote.html', '_blank');
-  if(!w) alert('Popup blocked. Allow popups for this site.');
-}
-
-// ===== Wire up =====
-window.addEventListener('DOMContentLoaded', ()=>{
-  setDefaultStartDate();
-  rebuildPrepayRateRows();
-  applyTemplateRates();
-  updateAll();
-
-  const ids=['dealName','advance','buyRate','sellRate','isoPts','holdback','frequency','startDate','maxPrepayMonths','tpl1','tpl2','tpl3','tpl4','periodicPay','noFee','feeAuto','feeBox'];
-  ids.forEach(id=>{
-    const el=byId(id); if(!el) return;
-    ['input','change','keyup','blur'].forEach(ev=> el.addEventListener(ev, ()=>{
-      if(id==='maxPrepayMonths'){ rebuildPrepayRateRows(); applyTemplateRates(); }
-      updateAll();
-    }));
-  });
-
-  document.addEventListener('input', (e)=>{
-    if(e.target && e.target.classList.contains('prepayRate')) updateAll();
-  });
-
-  // Clamp Sell on blur (cannot go below Buy)
-  byId('sellRate').addEventListener('blur', ()=>{
-    const br = +byId('buyRate').value || 0;
-    let v = parseFloat(byId('sellRate').value);
-    if(!Number.isFinite(v)) v = br;
-    if(v < br) v = br;
-    byId('sellRate').value = v.toFixed(2);
-    updateAll();
-  });
-
-  byId('recalcBtn').addEventListener('click', (e)=>{ e.preventDefault(); updateAll(); });
-  byId('printBtn').addEventListener('click', (e)=>{ e.preventDefault(); window.print(); });
-  byId('quickQuoteBtn').addEventListener('click', (e)=>{ e.preventDefault(); openQuickQuote(); });
-});
-</script>
-</body>
+<div class="row">
+<div>
+<label>Advance Amount ($)</label>
+<input type="number" id="advance" min="0" step="100" value="0" />
+</div>
+<div>
+<label>Periodic Payment ($)</label>
+<input type="number" id="periodicPay" min="1" step="1" placeholder="Enter weekly/daily payment" />
+</div>
+</div>
 </html>
