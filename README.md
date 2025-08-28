@@ -1,3 +1,3 @@
-# PAC Western Calculator — Starter
+# Pac Western Calculator — Internal
 
 THIS IS A WIP.
