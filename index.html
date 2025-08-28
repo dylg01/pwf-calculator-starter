@@ -1,7 +1,3 @@
-<!-- =========================
-FILE 1 of 3 — index.html (FULL RESTORE + linkable + localStorage fallback)
-Paste this whole file.
-========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,13 +36,20 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 .footer{text-align:center;color:var(--sub);font-size:12px;margin-top:20px}
 @media(max-width:960px){.container{grid-template-columns:1fr}.stats,.stats4{grid-template-columns:1fr 1fr}}
 @media print{ header{display:none}.btn{display:none}.card{box-shadow:none;border-color:#ddd} .pill{border-color:#ddd;color:#444;background:#fff}.table-wrap{max-height:unset;overflow:visible} body{background:#fff;color:#000} }
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
+.modal.show{display:flex}
+.modal-card{width:min(980px,95vw);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.modal-card h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);font-size:18px;display:flex;align-items:center;justify-content:space-between}
+.modal-card .content{padding:16px}
 </style>
 </head>
 <body>
 <header>PWF — Internal Deal Calculator</header>
 
 <div class="container">
-  <!-- ================= LEFT: INPUTS ================= -->
+  <!-- Inputs Panel -->
   <div class="card">
     <h2>Deal Inputs <span class="pill" id="dealNameBadge">No Deal Name</span></h2>
     <div class="content">
@@ -165,7 +168,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
     </div>
   </div>
 
-  <!-- ================= RIGHT: SUMMARY ================= -->
+  <!-- Results & Tables -->
   <div class="card">
     <h2 class="flex">Summary <span class="pill" id="validationMsg" aria-live="polite">Ready</span></h2>
     <div class="content">
@@ -173,7 +176,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
         <button class="btn sec" id="printBtn" type="button">Print</button>
         <button class="btn sec" id="copyLinkBtn" type="button">Copy Quote Link</button>
         <button class="btn sec" id="quickQuoteBtn" type="button">Quick Quote</button>
-        <button class="btn" id="recalcBtn" type="button">Recalculate</button>
+        <button class="btn" id="payScheduleBtn" type="button">Payment Schedule</button>
       </div>
 
       <div class="stats4">
@@ -207,11 +210,43 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
   </div>
 </div>
 
-<!-- Codec for linkable quotes -->
-<script src="./codec.js"></script>
+<!-- Payment Schedule Modal -->
+<div class="modal" id="scheduleModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="schedTitle">
+    <h3 id="schedTitle">Payment Schedule
+      <span class="pill" id="schedMeta"></span>
+      <div class="flex" style="gap:8px">
+        <button class="btn sec" id="downloadCsvBtn" type="button">Download CSV</button>
+        <button class="btn sec" id="printScheduleBtn" type="button">Print</button>
+        <button class="btn" id="closeSchedule" type="button">Close</button>
+      </div>
+    </h3>
+    <div class="content">
+      <div class="row" style="margin-bottom:8px">
+        <div>
+          <label>First Due Date</label>
+          <input type="date" id="firstDueDate" />
+        </div>
+        <div>
+          <label>Frequency</label>
+          <input id="freqDisplay" disabled />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="scheduleTable">
+          <thead><tr><th>#</th><th>Due Date</th><th>Amount</th><th>Running Balance</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="small" style="margin-top:8px" id="schedFoot"></div>
+    </div>
+  </div>
+</div>
 
+<script src="./codec.js"></script>
 <script>
 'use strict';
+// ===== Helpers =====
 const byId = (id)=>document.getElementById(id);
 const fmt  = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
 const fmt0 = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});
@@ -220,6 +255,7 @@ const monthAheadISO=()=>{const d=new Date();d.setMonth(d.getMonth()+1);return to
 
 function setDefaultStartDate(){ const el=byId('startDate'); if(el && !el.value){ el.value = monthAheadISO(); } }
 
+// ===== Fee logic =====
 function autoTierFee(advance){
   const A=+advance||0; if(A<=0) return 0;
   if(A<=9999) return 350;
@@ -241,6 +277,7 @@ function syncFeeBox(advance){
   else { feeInput.disabled=false; }
 }
 
+// ===== Prepay UI =====
 function rebuildPrepayRateRows(){
   const maxM = Math.max(1, Math.min(12, +(byId('maxPrepayMonths').value) || 4));
   byId('ppMonthsLabel').textContent = String(maxM);
@@ -256,7 +293,8 @@ function getPrepayRates(defaultSell){
   const inputs = Array.from(document.querySelectorAll('input.prepayRate'));
   const rates=[];
   for(let i=0;i<maxM;i++){
-    const raw=inputs[i]?.value; const v = raw===''||raw===undefined ? NaN : +raw;
+    const raw=inputs[i]?.value;
+    const v = raw===''||raw===undefined ? NaN : +raw;
     rates.push(Number.isFinite(v)? v : defaultSell);
   }
   return {rates, maxM};
@@ -280,15 +318,16 @@ function renderPrepayScenarios({advance, sellRate, merchantPayback}){
   const {rates,maxM} = getPrepayRates(sellRate);
   const tbody = byId('prepayScenarios').querySelector('tbody'); tbody.innerHTML='';
   for(let m=1;m<=maxM;m++){
-    const rawRate = rates[m-1] || sellRate;
-    const payoff  = +(advance * rawRate).toFixed(2);
-    const discount= +(merchantPayback - payoff).toFixed(2);
+    const rawRate = rates[m-1] || sellRate;           // ABSOLUTE rate at that month
+    const payoff  = +(advance * rawRate).toFixed(2);  // payoff at that month
+    const discount= +(merchantPayback - payoff).toFixed(2); // gross - payoff
     const tr=document.createElement('tr');
     tr.innerHTML = '<td>If Paid off in Month '+m+'</td><td>'+fmt(discount)+'</td><td>'+fmt(payoff)+'</td><td>'+rawRate.toFixed(2)+'</td>';
     tbody.appendChild(tr);
   }
 }
 
+// ===== Recalc (Main) =====
 function updateAll(){
   const name=(byId('dealName')?.value||'').trim();
   const badge=byId('dealNameBadge'); if(badge) badge.textContent = name || 'No Deal Name';
@@ -298,14 +337,17 @@ function updateAll(){
   const advance   = +byId('advance').value || 0;
   const buyRate   = +byId('buyRate').value || 1.20;
   const sellInput = byId('sellRate');
-  let   sellRate  = +sellInput.value || buyRate; if(sellRate < buyRate) sellRate = buyRate;
+  let   sellRate  = +sellInput.value || buyRate;
+  if(sellRate < buyRate) sellRate = buyRate;
 
-  const isoRaw    = +byId('isoPts').value || 0; const isoPctUsed= Math.round(isoRaw);
+  const isoRaw    = +byId('isoPts').value || 0;
+  const isoPctUsed= Math.round(isoRaw); // whole points only
   const holdback  = +byId('holdback').value || 0;
   const frequency = byId('frequency')?.value || 'weekly';
   const periodicPay = Math.max(0, Math.floor(+byId('periodicPay').value || 0));
 
-  syncFeeBox(advance); const fee = currentFee(advance);
+  syncFeeBox(advance);
+  const fee = currentFee(advance);
 
   let msg='Ready';
   if(advance<=0) msg='Advance must be > 0';
@@ -314,7 +356,7 @@ function updateAll(){
   const tag=byId('validationMsg'); if(tag){ tag.textContent=msg; tag.style.color=(msg==='Ready'?'var(--sub)':'var(--danger)'); }
 
   const effectiveSell = Math.max(0, sellRate - (isoPctUsed/100));
-  const merchantPaybackGross = advance * sellRate;
+  const merchantPaybackGross = advance * sellRate; // GROSS
   const paybackEff = advance * effectiveSell;
   const funderPayback = advance * buyRate;
   const isoCommission = advance * (isoPctUsed/100);
@@ -326,6 +368,7 @@ function updateAll(){
   byId('grossSpread').textContent = fmt(isoCommission);
   byId('netFunded').textContent = fmt(netFunded);
 
+  // Payments math
   const freqLabel = (frequency.charAt(0).toUpperCase()+frequency.slice(1));
   byId('freqLabel').textContent = freqLabel;
 
@@ -334,7 +377,9 @@ function updateAll(){
     totalPayments = Math.ceil(merchantPaybackGross / periodicPay);
     finalPayment  = Math.max(0, Math.round(merchantPaybackGross - periodicPay*(totalPayments-1)));
   }
-  const payTxt = (periodicPay>0) ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')') : '$0';
+  const payTxt = (periodicPay>0)
+    ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')')
+    : '$0';
   byId('paymentAmount').textContent = payTxt;
 
   let months = 0;
@@ -344,9 +389,11 @@ function updateAll(){
   }
   byId('totalPayments').textContent = String(totalPayments) + (totalPayments ? (' (≈ ' + months.toFixed(2) + ' mo)') : '');
 
+  // Prepay scenarios (use GROSS for discount math)
   renderPrepayScenarios({advance,sellRate,merchantPayback:merchantPaybackGross});
 }
 
+// ===== Quick Quote (URL handoff using codec.js) =====
 function gatherQuickQuoteData(){
   const {rates,maxM} = getPrepayRates(+byId('sellRate').value || 1.3);
   const data = {
@@ -373,24 +420,20 @@ function gatherQuickQuoteData(){
   data.basePeriods = (data.periodicPayMain>0 && paybackMain>0) ? (paybackMain / data.periodicPayMain) : NaN;
   return data;
 }
-
 function makeQuoteURL(data){
   const encoded = (window.Codec? Codec.encode(JSON.stringify(data)) : encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data))))));
   const url = new URL('./quick-quote.html', location.href);
   url.searchParams.set('q', encoded);
   return url.toString();
 }
-
 function openQuickQuote(){
   const data = gatherQuickQuoteData();
   if(data.advance<=0){ alert('Enter a valid Advance first.'); return; }
-  // Build link; also store fallback
   const url = makeQuoteURL(data);
   try{ localStorage.setItem('pwfQQData', JSON.stringify(data)); }catch(e){}
   const w = window.open(url, '_blank');
   if(!w) alert('Popup blocked. Allow popups for this site.');
 }
-
 async function copyQuoteLink(){
   const data = gatherQuickQuoteData();
   if(data.advance<=0){ byId('validationMsg').textContent='Advance must be > 0'; return; }
@@ -399,6 +442,89 @@ async function copyQuoteLink(){
   catch(e){ prompt('Copy this link:', url); }
 }
 
+// ===== Payment Schedule =====
+function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
+function nextBizDay(from){ const d=new Date(from); d.setDate(d.getDate()+1); while(isWeekend(d)) d.setDate(d.getDate()+1); return d; }
+function adjustIfWeekend(d){ const x=new Date(d); while(isWeekend(x)) x.setDate(x.getDate()+1); return x; }
+function addBizDays(start, n){ const d=new Date(start); let added=0; while(added<n){ d.setDate(d.getDate()+1); if(!isWeekend(d)) added++; } return d; }
+
+function openSchedule(){
+  const advance=+byId('advance').value||0;
+  const sell=Math.max(+byId('sellRate').value||0, +byId('buyRate').value||0);
+  const payback=advance*sell;
+  const pay=Math.max(0, Math.floor(+byId('periodicPay').value||0));
+  const freq=(byId('frequency').value||'weekly');
+
+  if(advance<=0 || pay<=0){ byId('validationMsg').textContent='Enter advance and payment first'; return; }
+
+  const count=Math.ceil(payback/pay);
+  const finalPay=Math.max(0, Math.round(payback - pay*(count-1)));
+
+  const modal=byId('scheduleModal');
+  const firstDue=byId('firstDueDate');
+  const freqDisp=byId('freqDisplay');
+  const meta=byId('schedMeta');
+  const foot=byId('schedFoot');
+
+  if(!firstDue.value){ firstDue.value = toLocalISO(nextBizDay(new Date())); }
+  freqDisp.value = (freq==='weekly'?'Weekly':'Daily (Biz)');
+  meta.textContent = `${count} payments • ${fmt0(pay)} (final ${fmt0(finalPay)})`;
+
+  const build=()=>{
+    const tbody=byId('scheduleTable').querySelector('tbody');
+    tbody.innerHTML='';
+    const rows=[];
+    const start=new Date(firstDue.value || toLocalISO(nextBizDay(new Date())));
+    let due=new Date(start);
+    let remaining=Math.round(payback);
+    for(let i=1;i<=count;i++){
+      const amt=(i<count)? Math.round(pay) : Math.round(finalPay||pay);
+      remaining = Math.max(0, remaining-amt);
+      const tr=document.createElement('tr');
+      tr.innerHTML = `<td>${i}</td><td>${toLocalISO(due)}</td><td>${fmt0(amt)}</td><td>${fmt0(remaining)}</td>`;
+      tbody.appendChild(tr);
+      // next date
+      if(freq==='weekly'){ due.setDate(due.getDate()+7); due=adjustIfWeekend(due); }
+      else { due = addBizDays(due,1); }
+      rows.push({n:i,date:toLocalISO(new Date(due)),amt});
+    }
+    foot.textContent = `Total scheduled: ${count} payments = ${fmt0(Math.round(pay)*(count-1) + Math.round(finalPay||pay))}`;
+    // stash csv generator on modal element
+    modal._csv = () => {
+      const lines=["# ,Due Date,Amount"]; // no running bal in csv for simplicity
+      let d=new Date(firstDue.value||toLocalISO(nextBizDay(new Date())));
+      for(let i=1;i<=count;i++){
+        const amt=(i<count)? Math.round(pay) : Math.round(finalPay||pay);
+        lines.push(`${i},${toLocalISO(d)},$${amt}`);
+        if(freq==='weekly'){ d.setDate(d.getDate()+7); d=adjustIfWeekend(d); }
+        else { d = addBizDays(d,1); }
+      }
+      return lines.join('\n');
+    };
+  };
+
+  build();
+  firstDue.addEventListener('change', build);
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+}
+
+function closeSchedule(){
+  const modal=byId('scheduleModal');
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+}
+
+function downloadCSV(){
+  const modal=byId('scheduleModal'); if(!modal._csv) return;
+  const csv=modal._csv();
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='payment-schedule.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+// ===== Wire up =====
 window.addEventListener('DOMContentLoaded', ()=>{
   setDefaultStartDate();
   rebuildPrepayRateRows();
@@ -414,19 +540,27 @@ window.addEventListener('DOMContentLoaded', ()=>{
     }));
   });
 
-  document.addEventListener('input', (e)=>{ if(e.target && e.target.classList.contains('prepayRate')) updateAll(); });
+  document.addEventListener('input', (e)=>{
+    if(e.target && e.target.classList.contains('prepayRate')) updateAll();
+  });
 
+  // Clamp Sell on blur (cannot go below Buy)
   byId('sellRate').addEventListener('blur', ()=>{
     const br = +byId('buyRate').value || 0;
     let v = parseFloat(byId('sellRate').value);
-    if(!Number.isFinite(v)) v = br; if(v < br) v = br;
-    byId('sellRate').value = v.toFixed(2); updateAll();
+    if(!Number.isFinite(v)) v = br;
+    if(v < br) v = br;
+    byId('sellRate').value = v.toFixed(2);
+    updateAll();
   });
 
-  byId('recalcBtn').addEventListener('click', (e)=>{ e.preventDefault(); updateAll(); });
   byId('printBtn').addEventListener('click', (e)=>{ e.preventDefault(); window.print(); });
   byId('quickQuoteBtn').addEventListener('click', (e)=>{ e.preventDefault(); openQuickQuote(); });
   byId('copyLinkBtn').addEventListener('click', (e)=>{ e.preventDefault(); copyQuoteLink(); });
+  byId('payScheduleBtn').addEventListener('click', (e)=>{ e.preventDefault(); openSchedule(); });
+  byId('closeSchedule').addEventListener('click', (e)=>{ e.preventDefault(); closeSchedule(); });
+  byId('downloadCsvBtn').addEventListener('click', (e)=>{ e.preventDefault(); downloadCSV(); });
+  byId('printScheduleBtn').addEventListener('click', (e)=>{ e.preventDefault(); window.print(); });
 });
 </script>
 </body>
