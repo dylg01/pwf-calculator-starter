@@ -1,16 +1,15 @@
+<!-- =========================
+FILE 1 of 3 — index.html (FULL RESTORE + linkable + localStorage fallback)
+Paste this whole file.
+========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PAC Western Deal Calculator — V20.5.3 (split)</title>
-<!-- V20.5.3: Quick Quote basePeriods logic, ISO↔Sell coupling, tiered fee, prepay -->
+<title>PWF — Internal Deal Calculator</title>
 <style>
-:root{
-  --gold:#d09c34; --bg:#101424; --panel:#12182c; --muted:#0f1426; --text:#ffffff;
-  --sub:rgba(255,255,255,.70); --border:rgba(255,255,255,.10); --danger:#ff5a5a;
-  --radius:16px; --shadow:0 12px 30px rgba(0,0,0,.35);
-}
+:root{ --gold:#d09c34; --bg:#101424; --panel:#12182c; --muted:#0f1426; --text:#ffffff; --sub:rgba(255,255,255,.70); --border:rgba(255,255,255,.10); --danger:#ff5a5a; --radius:16px; --shadow:0 12px 30px rgba(0,0,0,.35); }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial}
@@ -40,18 +39,14 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 .small{font-size:12px;color:var(--sub)}
 .footer{text-align:center;color:var(--sub);font-size:12px;margin-top:20px}
 @media(max-width:960px){.container{grid-template-columns:1fr}.stats,.stats4{grid-template-columns:1fr 1fr}}
-@media print{
-  header{display:none}.btn{display:none}.card{box-shadow:none;border-color:#ddd}
-  .pill{border-color:#ddd;color:#444;background:#fff}.table-wrap{max-height:unset;overflow:visible}
-  body{background:#fff;color:#000}
-}
+@media print{ header{display:none}.btn{display:none}.card{box-shadow:none;border-color:#ddd} .pill{border-color:#ddd;color:#444;background:#fff}.table-wrap{max-height:unset;overflow:visible} body{background:#fff;color:#000} }
 </style>
 </head>
 <body>
 <header>PWF — Internal Deal Calculator</header>
 
 <div class="container">
-  <!-- Inputs Panel -->
+  <!-- ================= LEFT: INPUTS ================= -->
   <div class="card">
     <h2>Deal Inputs <span class="pill" id="dealNameBadge">No Deal Name</span></h2>
     <div class="content">
@@ -170,12 +165,13 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
     </div>
   </div>
 
-  <!-- Results & Tables -->
+  <!-- ================= RIGHT: SUMMARY ================= -->
   <div class="card">
     <h2 class="flex">Summary <span class="pill" id="validationMsg" aria-live="polite">Ready</span></h2>
     <div class="content">
       <div class="flex" style="margin-bottom:12px;gap:8px;justify-content:flex-end">
         <button class="btn sec" id="printBtn" type="button">Print</button>
+        <button class="btn sec" id="copyLinkBtn" type="button">Copy Quote Link</button>
         <button class="btn sec" id="quickQuoteBtn" type="button">Quick Quote</button>
         <button class="btn" id="recalcBtn" type="button">Recalculate</button>
       </div>
@@ -211,10 +207,11 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
   </div>
 </div>
 
+<!-- Codec for linkable quotes -->
+<script src="./codec.js"></script>
+
 <script>
 'use strict';
-
-// ===== Helpers =====
 const byId = (id)=>document.getElementById(id);
 const fmt  = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
 const fmt0 = (n)=> n.toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});
@@ -223,7 +220,6 @@ const monthAheadISO=()=>{const d=new Date();d.setMonth(d.getMonth()+1);return to
 
 function setDefaultStartDate(){ const el=byId('startDate'); if(el && !el.value){ el.value = monthAheadISO(); } }
 
-// ===== Fee logic (MAIN PAGE) =====
 function autoTierFee(advance){
   const A=+advance||0; if(A<=0) return 0;
   if(A<=9999) return 350;
@@ -245,7 +241,6 @@ function syncFeeBox(advance){
   else { feeInput.disabled=false; }
 }
 
-// ===== Prepay UI =====
 function rebuildPrepayRateRows(){
   const maxM = Math.max(1, Math.min(12, +(byId('maxPrepayMonths').value) || 4));
   byId('ppMonthsLabel').textContent = String(maxM);
@@ -261,8 +256,7 @@ function getPrepayRates(defaultSell){
   const inputs = Array.from(document.querySelectorAll('input.prepayRate'));
   const rates=[];
   for(let i=0;i<maxM;i++){
-    const raw=inputs[i]?.value;
-    const v = raw===''||raw===undefined ? NaN : +raw;
+    const raw=inputs[i]?.value; const v = raw===''||raw===undefined ? NaN : +raw;
     rates.push(Number.isFinite(v)? v : defaultSell);
   }
   return {rates, maxM};
@@ -286,38 +280,32 @@ function renderPrepayScenarios({advance, sellRate, merchantPayback}){
   const {rates,maxM} = getPrepayRates(sellRate);
   const tbody = byId('prepayScenarios').querySelector('tbody'); tbody.innerHTML='';
   for(let m=1;m<=maxM;m++){
-    const rawRate = rates[m-1] || sellRate;           // ABSOLUTE rate at that month
-    const payoff  = +(advance * rawRate).toFixed(2);  // payoff at that month
-    const discount= +(merchantPayback - payoff).toFixed(2); // gross - payoff
+    const rawRate = rates[m-1] || sellRate;
+    const payoff  = +(advance * rawRate).toFixed(2);
+    const discount= +(merchantPayback - payoff).toFixed(2);
     const tr=document.createElement('tr');
     tr.innerHTML = '<td>If Paid off in Month '+m+'</td><td>'+fmt(discount)+'</td><td>'+fmt(payoff)+'</td><td>'+rawRate.toFixed(2)+'</td>';
     tbody.appendChild(tr);
   }
 }
 
-// ===== Recalc (Main) =====
 function updateAll(){
   const name=(byId('dealName')?.value||'').trim();
   const badge=byId('dealNameBadge'); if(badge) badge.textContent = name || 'No Deal Name';
   if(name) document.title = 'Pac Western Deal — '+name;
 
   setDefaultStartDate();
-  const startDate = byId('startDate')?.value || monthAheadISO();
-
   const advance   = +byId('advance').value || 0;
   const buyRate   = +byId('buyRate').value || 1.20;
   const sellInput = byId('sellRate');
-  let   sellRate  = +sellInput.value || buyRate;
-  if(sellRate < buyRate) sellRate = buyRate;
+  let   sellRate  = +sellInput.value || buyRate; if(sellRate < buyRate) sellRate = buyRate;
 
-  const isoRaw    = +byId('isoPts').value || 0;
-  const isoPctUsed= Math.round(isoRaw); // whole points only
+  const isoRaw    = +byId('isoPts').value || 0; const isoPctUsed= Math.round(isoRaw);
   const holdback  = +byId('holdback').value || 0;
   const frequency = byId('frequency')?.value || 'weekly';
   const periodicPay = Math.max(0, Math.floor(+byId('periodicPay').value || 0));
 
-  syncFeeBox(advance);
-  const fee = currentFee(advance);
+  syncFeeBox(advance); const fee = currentFee(advance);
 
   let msg='Ready';
   if(advance<=0) msg='Advance must be > 0';
@@ -326,7 +314,7 @@ function updateAll(){
   const tag=byId('validationMsg'); if(tag){ tag.textContent=msg; tag.style.color=(msg==='Ready'?'var(--sub)':'var(--danger)'); }
 
   const effectiveSell = Math.max(0, sellRate - (isoPctUsed/100));
-  const merchantPaybackGross = advance * sellRate; // GROSS
+  const merchantPaybackGross = advance * sellRate;
   const paybackEff = advance * effectiveSell;
   const funderPayback = advance * buyRate;
   const isoCommission = advance * (isoPctUsed/100);
@@ -338,7 +326,6 @@ function updateAll(){
   byId('grossSpread').textContent = fmt(isoCommission);
   byId('netFunded').textContent = fmt(netFunded);
 
-  // Payments math
   const freqLabel = (frequency.charAt(0).toUpperCase()+frequency.slice(1));
   byId('freqLabel').textContent = freqLabel;
 
@@ -347,9 +334,7 @@ function updateAll(){
     totalPayments = Math.ceil(merchantPaybackGross / periodicPay);
     finalPayment  = Math.max(0, Math.round(merchantPaybackGross - periodicPay*(totalPayments-1)));
   }
-  const payTxt = (periodicPay>0)
-    ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')')
-    : '$0';
+  const payTxt = (periodicPay>0) ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')') : '$0';
   byId('paymentAmount').textContent = payTxt;
 
   let months = 0;
@@ -359,7 +344,6 @@ function updateAll(){
   }
   byId('totalPayments').textContent = String(totalPayments) + (totalPayments ? (' (≈ ' + months.toFixed(2) + ' mo)') : '');
 
-  // Prepay scenarios (use GROSS for discount math)
   renderPrepayScenarios({advance,sellRate,merchantPayback:merchantPaybackGross});
 }
 
@@ -378,8 +362,6 @@ function gatherQuickQuoteData(){
     prepayRates: rates,
     maxPrepayMonths: maxM,
   };
-
-  // For basePeriods method on QQ
   const paybackMain = data.advance * data.sellRate;
   data.monthsBase = (() => {
     if(data.periodicPayMain>0){
@@ -389,18 +371,34 @@ function gatherQuickQuoteData(){
     return 1;
   })();
   data.basePeriods = (data.periodicPayMain>0 && paybackMain>0) ? (paybackMain / data.periodicPayMain) : NaN;
-
   return data;
 }
+
+function makeQuoteURL(data){
+  const encoded = (window.Codec? Codec.encode(JSON.stringify(data)) : encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data))))));
+  const url = new URL('./quick-quote.html', location.href);
+  url.searchParams.set('q', encoded);
+  return url.toString();
+}
+
 function openQuickQuote(){
   const data = gatherQuickQuoteData();
   if(data.advance<=0){ alert('Enter a valid Advance first.'); return; }
-  sessionStorage.setItem('pwfQQData', JSON.stringify(data));
-  const w = window.open('./quick-quote.html', '_blank');
+  // Build link; also store fallback
+  const url = makeQuoteURL(data);
+  try{ localStorage.setItem('pwfQQData', JSON.stringify(data)); }catch(e){}
+  const w = window.open(url, '_blank');
   if(!w) alert('Popup blocked. Allow popups for this site.');
 }
 
-// ===== Wire up =====
+async function copyQuoteLink(){
+  const data = gatherQuickQuoteData();
+  if(data.advance<=0){ byId('validationMsg').textContent='Advance must be > 0'; return; }
+  const url = makeQuoteURL(data);
+  try{ await navigator.clipboard.writeText(url); byId('validationMsg').textContent='Link copied'; }
+  catch(e){ prompt('Copy this link:', url); }
+}
+
 window.addEventListener('DOMContentLoaded', ()=>{
   setDefaultStartDate();
   rebuildPrepayRateRows();
@@ -416,23 +414,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
     }));
   });
 
-  document.addEventListener('input', (e)=>{
-    if(e.target && e.target.classList.contains('prepayRate')) updateAll();
-  });
+  document.addEventListener('input', (e)=>{ if(e.target && e.target.classList.contains('prepayRate')) updateAll(); });
 
-  // Clamp Sell on blur (cannot go below Buy)
   byId('sellRate').addEventListener('blur', ()=>{
     const br = +byId('buyRate').value || 0;
     let v = parseFloat(byId('sellRate').value);
-    if(!Number.isFinite(v)) v = br;
-    if(v < br) v = br;
-    byId('sellRate').value = v.toFixed(2);
-    updateAll();
+    if(!Number.isFinite(v)) v = br; if(v < br) v = br;
+    byId('sellRate').value = v.toFixed(2); updateAll();
   });
 
   byId('recalcBtn').addEventListener('click', (e)=>{ e.preventDefault(); updateAll(); });
   byId('printBtn').addEventListener('click', (e)=>{ e.preventDefault(); window.print(); });
   byId('quickQuoteBtn').addEventListener('click', (e)=>{ e.preventDefault(); openQuickQuote(); });
+  byId('copyLinkBtn').addEventListener('click', (e)=>{ e.preventDefault(); copyQuoteLink(); });
 });
 </script>
 </body>
