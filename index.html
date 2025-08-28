@@ -48,7 +48,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
 </style>
 </head>
 <body>
-<header>PAC Western Financial — Internal Deal Calculator</header>
+<header>PWF — Internal Deal Calculator</header>
 
 <div class="container">
   <!-- Inputs Panel -->
@@ -166,7 +166,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
         </div>
       </div>
 
-      <div class="small" style="margin-top:10px;">PAC Calc</div>
+      <div class="small" style="margin-top:10px;">PWF Calc</div>
     </div>
   </div>
 
@@ -206,7 +206,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
         </div>
       </div>
 
-      <div class="footer">PAC Western Financial — Internal Calculator (Standalone HTML)</div>
+      <div class="footer">PWF — Internal Calculator (Standalone HTML)</div>
     </div>
   </div>
 </div>
@@ -299,7 +299,7 @@ function renderPrepayScenarios({advance, sellRate, merchantPayback}){
 function updateAll(){
   const name=(byId('dealName')?.value||'').trim();
   const badge=byId('dealNameBadge'); if(badge) badge.textContent = name || 'No Deal Name';
-  if(name) document.title = 'PAC Western Deal — '+name;
+  if(name) document.title = 'Pac Western Deal — '+name;
 
   setDefaultStartDate();
   const startDate = byId('startDate')?.value || monthAheadISO();
