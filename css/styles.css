@@ -1,0 +1,10 @@
+/* Minimal starter styles. Replace with your real CSS. */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.4; }
+.site-header, .site-footer { padding: 12px 16px; border-bottom: 1px solid #ddd; }
+.site-footer { border-top: 1px solid #ddd; border-bottom: none; }
+.container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+button { padding: 8px 12px; border: 1px solid #bbb; background: #f7f7f7; cursor: pointer; }
+.panel { margin-top: 12px; padding: 12px; border: 1px solid #eee; background: #fafafa; }
+nav a { margin-right: 12px; text-decoration: none; }
