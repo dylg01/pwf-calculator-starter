@@ -210,7 +210,7 @@ thead th{position:sticky;top:0;background:var(--panel);z-index:1}
   </div>
 </div>
 
-<!-- Payment Schedule Modal -->
+<!-- Payment Schedule Modal (unchanged) -->
 <div class="modal" id="scheduleModal" aria-hidden="true">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="schedTitle">
     <h3 id="schedTitle">Payment Schedule
@@ -293,8 +293,7 @@ function getPrepayRates(defaultSell){
   const inputs = Array.from(document.querySelectorAll('input.prepayRate'));
   const rates=[];
   for(let i=0;i<maxM;i++){
-    const raw=inputs[i]?.value;
-    const v = raw===''||raw===undefined ? NaN : +raw;
+    const raw=inputs[i]?.value; const v = raw===''||raw===undefined ? NaN : +raw;
     rates.push(Number.isFinite(v)? v : defaultSell);
   }
   return {rates, maxM};
@@ -318,16 +317,16 @@ function renderPrepayScenarios({advance, sellRate, merchantPayback}){
   const {rates,maxM} = getPrepayRates(sellRate);
   const tbody = byId('prepayScenarios').querySelector('tbody'); tbody.innerHTML='';
   for(let m=1;m<=maxM;m++){
-    const rawRate = rates[m-1] || sellRate;           // ABSOLUTE rate at that month
-    const payoff  = +(advance * rawRate).toFixed(2);  // payoff at that month
-    const discount= +(merchantPayback - payoff).toFixed(2); // gross - payoff
+    const rawRate = rates[m-1] || sellRate;
+    const payoff  = +(advance * rawRate).toFixed(2);
+    const discount= +(merchantPayback - payoff).toFixed(2);
     const tr=document.createElement('tr');
     tr.innerHTML = '<td>If Paid off in Month '+m+'</td><td>'+fmt(discount)+'</td><td>'+fmt(payoff)+'</td><td>'+rawRate.toFixed(2)+'</td>';
     tbody.appendChild(tr);
   }
 }
 
-// ===== Recalc (Main) =====
+// ===== Calculations =====
 function updateAll(){
   const name=(byId('dealName')?.value||'').trim();
   const badge=byId('dealNameBadge'); if(badge) badge.textContent = name || 'No Deal Name';
@@ -337,17 +336,14 @@ function updateAll(){
   const advance   = +byId('advance').value || 0;
   const buyRate   = +byId('buyRate').value || 1.20;
   const sellInput = byId('sellRate');
-  let   sellRate  = +sellInput.value || buyRate;
-  if(sellRate < buyRate) sellRate = buyRate;
+  let   sellRate  = +sellInput.value || buyRate; if(sellRate < buyRate) sellRate = buyRate;
 
-  const isoRaw    = +byId('isoPts').value || 0;
-  const isoPctUsed= Math.round(isoRaw); // whole points only
+  const isoRaw    = +byId('isoPts').value || 0; const isoPctUsed= Math.round(isoRaw);
   const holdback  = +byId('holdback').value || 0;
   const frequency = byId('frequency')?.value || 'weekly';
   const periodicPay = Math.max(0, Math.floor(+byId('periodicPay').value || 0));
 
-  syncFeeBox(advance);
-  const fee = currentFee(advance);
+  syncFeeBox(advance); const fee = currentFee(advance);
 
   let msg='Ready';
   if(advance<=0) msg='Advance must be > 0';
@@ -356,7 +352,7 @@ function updateAll(){
   const tag=byId('validationMsg'); if(tag){ tag.textContent=msg; tag.style.color=(msg==='Ready'?'var(--sub)':'var(--danger)'); }
 
   const effectiveSell = Math.max(0, sellRate - (isoPctUsed/100));
-  const merchantPaybackGross = advance * sellRate; // GROSS
+  const merchantPaybackGross = advance * sellRate;
   const paybackEff = advance * effectiveSell;
   const funderPayback = advance * buyRate;
   const isoCommission = advance * (isoPctUsed/100);
@@ -368,7 +364,6 @@ function updateAll(){
   byId('grossSpread').textContent = fmt(isoCommission);
   byId('netFunded').textContent = fmt(netFunded);
 
-  // Payments math
   const freqLabel = (frequency.charAt(0).toUpperCase()+frequency.slice(1));
   byId('freqLabel').textContent = freqLabel;
 
@@ -377,10 +372,7 @@ function updateAll(){
     totalPayments = Math.ceil(merchantPaybackGross / periodicPay);
     finalPayment  = Math.max(0, Math.round(merchantPaybackGross - periodicPay*(totalPayments-1)));
   }
-  const payTxt = (periodicPay>0)
-    ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')')
-    : '$0';
-  byId('paymentAmount').textContent = payTxt;
+  byId('paymentAmount').textContent = (periodicPay>0) ? (fmt0(periodicPay) + ' (final ' + fmt0(finalPayment) + ')') : '$0';
 
   let months = 0;
   if(periodicPay>0){
@@ -389,11 +381,10 @@ function updateAll(){
   }
   byId('totalPayments').textContent = String(totalPayments) + (totalPayments ? (' (≈ ' + months.toFixed(2) + ' mo)') : '');
 
-  // Prepay scenarios (use GROSS for discount math)
   renderPrepayScenarios({advance,sellRate,merchantPayback:merchantPaybackGross});
 }
 
-// ===== Quick Quote (URL handoff using codec.js) =====
+// ===== Quick Quote link (build + copy on MAIN PAGE) =====
 function gatherQuickQuoteData(){
   const {rates,maxM} = getPrepayRates(+byId('sellRate').value || 1.3);
   const data = {
@@ -420,60 +411,58 @@ function gatherQuickQuoteData(){
   data.basePeriods = (data.periodicPayMain>0 && paybackMain>0) ? (paybackMain / data.periodicPayMain) : NaN;
   return data;
 }
-function makeQuoteURL(data){
+function makeQuoteURL(){
+  const data = gatherQuickQuoteData();
+  if(data.advance<=0) throw new Error('Advance must be > 0');
   const encoded = (window.Codec? Codec.encode(JSON.stringify(data)) : encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data))))));
   const url = new URL('./quick-quote.html', location.href);
   url.searchParams.set('q', encoded);
   return url.toString();
 }
-function openQuickQuote(){
-  const data = gatherQuickQuoteData();
-  if(data.advance<=0){ alert('Enter a valid Advance first.'); return; }
-  const url = makeQuoteURL(data);
-  try{ localStorage.setItem('pwfQQData', JSON.stringify(data)); }catch(e){}
-  const w = window.open(url, '_blank');
-  if(!w) alert('Popup blocked. Allow popups for this site.');
-}
 async function copyQuoteLink(){
-  const data = gatherQuickQuoteData();
-  if(data.advance<=0){ byId('validationMsg').textContent='Advance must be > 0'; return; }
-  const url = makeQuoteURL(data);
-  try{ await navigator.clipboard.writeText(url); byId('validationMsg').textContent='Link copied'; }
-  catch(e){ prompt('Copy this link:', url); }
+  try{
+    const url = makeQuoteURL();
+    // Try modern API first
+    try{ await navigator.clipboard.writeText(url); }
+    catch(_){
+      // Fallback for HTTP origins: temporary textarea
+      const ta=document.createElement('textarea'); ta.value=url; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    byId('validationMsg').textContent='Link copied';
+  }catch(e){
+    byId('validationMsg').textContent=e.message||'Unable to copy link';
+  }
+}
+function openQuickQuote(){
+  try{ const url = makeQuoteURL(); window.open(url, '_blank'); }
+  catch(e){ byId('validationMsg').textContent=e.message||'Unable to open quote'; }
 }
 
-// ===== Payment Schedule =====
+// ===== Payment Schedule (unchanged) =====
 function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
 function nextBizDay(from){ const d=new Date(from); d.setDate(d.getDate()+1); while(isWeekend(d)) d.setDate(d.getDate()+1); return d; }
 function adjustIfWeekend(d){ const x=new Date(d); while(isWeekend(x)) x.setDate(x.getDate()+1); return x; }
 function addBizDays(start, n){ const d=new Date(start); let added=0; while(added<n){ d.setDate(d.getDate()+1); if(!isWeekend(d)) added++; } return d; }
-
 function openSchedule(){
   const advance=+byId('advance').value||0;
   const sell=Math.max(+byId('sellRate').value||0, +byId('buyRate').value||0);
   const payback=advance*sell;
   const pay=Math.max(0, Math.floor(+byId('periodicPay').value||0));
   const freq=(byId('frequency').value||'weekly');
-
   if(advance<=0 || pay<=0){ byId('validationMsg').textContent='Enter advance and payment first'; return; }
-
   const count=Math.ceil(payback/pay);
   const finalPay=Math.max(0, Math.round(payback - pay*(count-1)));
-
   const modal=byId('scheduleModal');
   const firstDue=byId('firstDueDate');
   const freqDisp=byId('freqDisplay');
   const meta=byId('schedMeta');
   const foot=byId('schedFoot');
-
   if(!firstDue.value){ firstDue.value = toLocalISO(nextBizDay(new Date())); }
   freqDisp.value = (freq==='weekly'?'Weekly':'Daily (Biz)');
   meta.textContent = `${count} payments • ${fmt0(pay)} (final ${fmt0(finalPay)})`;
-
   const build=()=>{
     const tbody=byId('scheduleTable').querySelector('tbody');
     tbody.innerHTML='';
-    const rows=[];
     const start=new Date(firstDue.value || toLocalISO(nextBizDay(new Date())));
     let due=new Date(start);
     let remaining=Math.round(payback);
@@ -483,77 +472,36 @@ function openSchedule(){
       const tr=document.createElement('tr');
       tr.innerHTML = `<td>${i}</td><td>${toLocalISO(due)}</td><td>${fmt0(amt)}</td><td>${fmt0(remaining)}</td>`;
       tbody.appendChild(tr);
-      // next date
       if(freq==='weekly'){ due.setDate(due.getDate()+7); due=adjustIfWeekend(due); }
       else { due = addBizDays(due,1); }
-      rows.push({n:i,date:toLocalISO(new Date(due)),amt});
     }
     foot.textContent = `Total scheduled: ${count} payments = ${fmt0(Math.round(pay)*(count-1) + Math.round(finalPay||pay))}`;
-    // stash csv generator on modal element
-    modal._csv = () => {
-      const lines=["# ,Due Date,Amount"]; // no running bal in csv for simplicity
-      let d=new Date(firstDue.value||toLocalISO(nextBizDay(new Date())));
-      for(let i=1;i<=count;i++){
-        const amt=(i<count)? Math.round(pay) : Math.round(finalPay||pay);
-        lines.push(`${i},${toLocalISO(d)},$${amt}`);
-        if(freq==='weekly'){ d.setDate(d.getDate()+7); d=adjustIfWeekend(d); }
-        else { d = addBizDays(d,1); }
-      }
-      return lines.join('\n');
-    };
   };
-
   build();
   firstDue.addEventListener('change', build);
   modal.classList.add('show');
   modal.setAttribute('aria-hidden','false');
 }
-
-function closeSchedule(){
-  const modal=byId('scheduleModal');
-  modal.classList.remove('show');
-  modal.setAttribute('aria-hidden','true');
-}
-
+function closeSchedule(){ const modal=byId('scheduleModal'); modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); }
 function downloadCSV(){
-  const modal=byId('scheduleModal'); if(!modal._csv) return;
-  const csv=modal._csv();
-  const blob=new Blob([csv],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='payment-schedule.csv'; a.click();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  const table=byId('scheduleTable');
+  const rows=[["#","Due Date","Amount","Running Balance"]];
+  for(const tr of table.querySelectorAll('tbody tr')){
+    const tds=[...tr.children].map(td=>td.textContent.replace(/[$,]/g,''));
+    rows.push(tds);
+  }
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='payment-schedule.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 // ===== Wire up =====
 window.addEventListener('DOMContentLoaded', ()=>{
-  setDefaultStartDate();
-  rebuildPrepayRateRows();
-  applyTemplateRates();
-  updateAll();
-
+  setDefaultStartDate(); rebuildPrepayRateRows(); applyTemplateRates(); updateAll();
   const ids=['dealName','advance','buyRate','sellRate','isoPts','holdback','frequency','startDate','maxPrepayMonths','tpl1','tpl2','tpl3','tpl4','periodicPay','noFee','feeAuto','feeBox'];
-  ids.forEach(id=>{
-    const el=byId(id); if(!el) return;
-    ['input','change','keyup','blur'].forEach(ev=> el.addEventListener(ev, ()=>{
-      if(id==='maxPrepayMonths'){ rebuildPrepayRateRows(); applyTemplateRates(); }
-      updateAll();
-    }));
-  });
-
-  document.addEventListener('input', (e)=>{
-    if(e.target && e.target.classList.contains('prepayRate')) updateAll();
-  });
-
-  // Clamp Sell on blur (cannot go below Buy)
-  byId('sellRate').addEventListener('blur', ()=>{
-    const br = +byId('buyRate').value || 0;
-    let v = parseFloat(byId('sellRate').value);
-    if(!Number.isFinite(v)) v = br;
-    if(v < br) v = br;
-    byId('sellRate').value = v.toFixed(2);
-    updateAll();
-  });
-
+  ids.forEach(id=>{ const el=byId(id); if(!el) return; ['input','change','keyup','blur'].forEach(ev=> el.addEventListener(ev, ()=>{ if(id==='maxPrepayMonths'){ rebuildPrepayRateRows(); applyTemplateRates(); } updateAll(); })); });
+  document.addEventListener('input', (e)=>{ if(e.target && e.target.classList.contains('prepayRate')) updateAll(); });
+  byId('sellRate').addEventListener('blur', ()=>{ const br=+byId('buyRate').value||0; let v=parseFloat(byId('sellRate').value); if(!Number.isFinite(v)) v=br; if(v<br) v=br; byId('sellRate').value=v.toFixed(2); updateAll(); });
   byId('printBtn').addEventListener('click', (e)=>{ e.preventDefault(); window.print(); });
   byId('quickQuoteBtn').addEventListener('click', (e)=>{ e.preventDefault(); openQuickQuote(); });
   byId('copyLinkBtn').addEventListener('click', (e)=>{ e.preventDefault(); copyQuoteLink(); });
