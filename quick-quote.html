@@ -47,12 +47,24 @@ th:first-child,td:first-child{text-align:left}
     <div class="share">
       <input id="shareUrl" readonly>
       <button class="btn sec" id="copyShare">Copy Link</button>
+      <button class="btn sec" id="merchantView" type="button">Merchant View</button>
     </div>
     <button class="btn sec" id="qqBack" type="button">Close</button>
     <button class="btn" id="qqPrint" type="button">Print</button>
   </div>
 </header>
-
+<script>
+(function(){
+  const btn = document.getElementById('merchantView'); if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    // Build merchant URL in the same folder, preserve query (?q=... and any UTMs)
+    const u = new URL('merchant-quote.html', location.href); u.search = location.search;
+    window.open(u.toString(), '_blank');
+    // Optional analytics event
+    window.plausible && window.plausible('Merchant View Opened');
+  });
+})();
+</script>
 <div class="container">
   <div class="card">
     <h2>Approved Range <span class="small" id="qqExp" style="opacity:.85"></span></h2>
