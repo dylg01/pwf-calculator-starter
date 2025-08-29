@@ -1,3 +1,7 @@
+<!-- =========================
+FILE 1 of 2 — merchant-quote.html (NEW PAGE)
+Merchant-friendly presentation of the same deal. Reads the same `?q=` payload as quick-quote.html.
+========================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,12 +18,13 @@ header{display:flex;justify-content:space-between;align-items:center;padding:12p
 .card h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);font-size:18px;display:flex;align-items:center;justify-content:space-between}
 .card .content{padding:16px}
 .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.statgrid.statgrid4{grid-template-columns:repeat(4,1fr)}
 .stat{background:var(--muted);border:1px solid var(--border);border-radius:14px;padding:14px}
 .stat .k{font-size:12px;color:var(--sub)}
 .stat .v{font-size:22px;font-weight:800;margin-top:6px}
 .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(16,20,36,.6);border:1px solid var(--border);color:var(--sub);font-size:12px}
 .table-wrap{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:12px}
-/* Make Early Payoff table narrower on wide screens */
+/* Narrower Early Payoff table on wide screens */
 .table-wrap.payoff-narrow{max-width:720px;margin:0 auto}
 @media(max-width:820px){.table-wrap.payoff-narrow{max-width:100%}}
 th,td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
@@ -56,10 +61,11 @@ th:first-child,td:first-child{text-align:left}
         <div class="stat"><div class="k">Total Payback</div><div class="v" id="paybackOut">$0</div></div>
         <div class="stat"><div class="k">Payment</div><div class="v" id="payOut">$0</div><div class="small" id="payMeta">—</div></div>
       </div>
-      <div class="statgrid" style="margin-top:12px;">
+      <div class="statgrid statgrid4" style="margin-top:12px;">
         <div class="stat"><div class="k">Estimated # of Payments</div><div class="v" id="countOut">0</div></div>
         <div class="stat"><div class="k">Approx. Term</div><div class="v" id="monthsOut">0 mo</div></div>
         <div class="stat"><div class="k">Net to You (after fees/holdbacks)</div><div class="v" id="netOut">$0</div></div>
+        <div class="stat"><div class="k">Estimated Fee</div><div class="v" id="feeOut">$0</div></div>
       </div>
       <div class="disc">This is a proposal for discussion purposes and is not a commitment to fund. Final terms subject to underwriting and documentation.</div>
     </div>
@@ -77,6 +83,13 @@ th:first-child,td:first-child{text-align:left}
     </div>
   </div>
 
+  <div class="card">
+    <h2>Next Steps</h2>
+    <div class="content">
+      <div class="note" id="nextSteps">Please confirm the offer and we’ll send the document checklist.
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="./codec.js"></script>
@@ -104,7 +117,7 @@ payment = Math.max(1, Math.round(payment));
 let count=0, finalPay=0, monthsEst=0; if(payment>0 && payback>0){ count=Math.ceil(payback/payment); finalPay=Math.max(0, Math.round(payback - payment*(count-1))); monthsEst=(freq==='Weekly')?((payback/payment)/4.33):((payback/payment)/21); }
 
 // Fill UI
-if(name) document.title = 'Funding Proposal — ' + name; document.getElementById('dealBadge').textContent = name||'—'; document.getElementById('freqBadge').textContent = freq; document.getElementById('advOut').textContent=fmt(A); document.getElementById('paybackOut').textContent=fmt(payback); document.getElementById('payOut').textContent = fmt0(payment) + ' (final ' + fmt0(finalPay) + ')'; document.getElementById('payMeta').textContent = freq + ' fixed'; document.getElementById('countOut').textContent = String(count); document.getElementById('monthsOut').textContent = monthsEst.toFixed(2) + ' mo'; document.getElementById('netOut').textContent=fmt(net);
+if(name) document.title = 'Funding Proposal — ' + name; document.getElementById('dealBadge').textContent = name||'—'; document.getElementById('freqBadge').textContent = freq; document.getElementById('advOut').textContent=fmt(A); document.getElementById('paybackOut').textContent=fmt(payback); document.getElementById('payOut').textContent = fmt0(payment) + ' (final ' + fmt0(finalPay) + ')'; document.getElementById('payMeta').textContent = freq + ' fixed'; document.getElementById('countOut').textContent = String(count); document.getElementById('monthsOut').textContent = monthsEst.toFixed(2) + ' mo'; document.getElementById('netOut').textContent=fmt(net); document.getElementById('feeOut').textContent=fmt(fee);
 
 // Prepay table (merchant framing: savings vs full payback)
 const ppBody=document.getElementById('ppBody'); ppBody.innerHTML=''; for(let m=1;m<=maxM;m++){ const rate = +(prepayRates[m-1] ?? sell); const payoff = +(A*rate).toFixed(2); const save = +(payback - payoff).toFixed(2); const tr=document.createElement('tr'); tr.innerHTML = `<td>${m}</td><td>${fmt(save)}</td><td>${fmt(payoff)}</td>`; ppBody.appendChild(tr); }
